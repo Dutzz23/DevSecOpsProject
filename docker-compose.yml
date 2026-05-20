@@ -21,7 +21,7 @@ services:
   wordpress:
     build:
       context: ./wordpress
-    image: ${WORDPRESS_IMAGE:-wordpress-baseline:local}
+    image: ${WORDPRESS_IMAGE:-wordpress-hardened:local}
     container_name: wp_app
     restart: unless-stopped
     depends_on:
@@ -34,14 +34,18 @@ services:
       WORDPRESS_DB_PASSWORD: ${WORDPRESS_DB_PASSWORD:-wppass}
       WORDPRESS_TABLE_PREFIX: ${WORDPRESS_TABLE_PREFIX:-wp_}
       WORDPRESS_DEBUG: "false"
+      WORDPRESS_CONFIG_EXTRA: |
+        define('DISALLOW_FILE_EDIT', true);
+        define('DISABLE_WP_CRON', true);
+        define('WP_AUTO_UPDATE_CORE', true);
     ports:
-      - "8080:80"
+      - "8080:8080"
     volumes:
       - wp_data:/var/www/html
     networks:
       - wordpress_net
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost/ >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/ >/dev/null || exit 1"]
       interval: 20s
       timeout: 5s
       retries: 15

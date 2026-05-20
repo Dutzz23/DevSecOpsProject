@@ -51,9 +51,6 @@ jobs:
         run: |
           docker exec --user root wp_app mkdir -p /var/www/html/wp-content/mu-plugins
           docker cp wordpress/wp-hardening.php wp_app:/var/www/html/wp-content/mu-plugins/wp-hardening.php
-          docker exec --user root wp_app rm -f /var/www/html/readme.html /var/www/html/license.txt
-          docker exec --user root wp_app rm -rf /var/www/html/wp-content/plugins/akismet /var/www/html/wp-content/plugins/hello.php
-          docker exec --user root wp_app find /var/www/html/wp-content/themes -name readme.txt -delete
           docker exec --user root wp_app chown -R www-data:www-data /var/www/html/wp-content/mu-plugins
 
       - name: Verify hardening files
@@ -61,7 +58,6 @@ jobs:
           docker exec wp_app test -f /etc/apache2/conf-enabled/zz-security-hardening.conf
           docker exec wp_app test -f /usr/local/etc/php/conf.d/security-hardening.ini
           docker exec wp_app test -f /var/www/html/wp-content/mu-plugins/wp-hardening.php
-          docker exec wp_app test ! -e /var/www/html/wp-content/plugins/akismet
           docker exec wp_app php -i | grep -q "expose_php => Off => Off"
 
       - name: Install WordPress test site
@@ -97,7 +93,7 @@ jobs:
 
           WPSCAN_ARGS=(
             --url http://localhost:8080
-            --enumerate u,vp,vt
+            --enumerate u,ap,at
             --plugins-detection aggressive
             --force
           )

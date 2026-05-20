@@ -1,0 +1,6 @@
+.git
+.github
+docs
+scans
+docker-compose.yml
+*.md
