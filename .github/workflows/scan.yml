@@ -1,4 +1,7 @@
+name: Initial WordPress WPScan
+
 on:
+  workflow_dispatch:
   push:
     branches:
     - main
@@ -6,6 +9,13 @@ on:
 jobs:
   wordpress-wpscan:
     runs-on: ubuntu-latest
+    env:
+      COMPOSE_PROJECT_NAME: wpbaseline
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_DB_USER: wpuser
+      WORDPRESS_DB_PASSWORD: wppass
+      MYSQL_ROOT_PASSWORD: password
+      WORDPRESS_IMAGE: wordpress-baseline:ci
 
     steps:
       - name: Checkout (required even if no repo code is used)
@@ -15,40 +25,78 @@ jobs:
         run: |
           sudo systemctl start docker
           docker version
-      - name: Start MySQL container
+          docker compose version
+
+      - name: Start WordPress stack
         run: |
-          docker run -d --name wp-db \
-          -e MYSQL_ROOT_PASSWORD=password \
-          -e MYSQL_DATABASE=wordpress \
-          -e MYSQL_USER=wpuser \
-          -e MYSQL_PASSWORD=wppass \
-          -p 3306:3306 \
-          mysql:5.7
-      - name: Start WordPress container
-        run: |
-          docker run -d --name wp-site \
-          --link wp-db:mysql \
-          -e WORDPRESS_DB_HOST=host.docker.internal:3306 \
-          -e WORDPRESS_DB_USER=wpuser \
-          -e WORDPRESS_DB_PASSWORD=wppass \
-          -e WORDPRESS_DB_NAME=wordpress \
-          -p 8080:80 \
-          wordpress:latest
+          docker compose up -d --build
+
       - name: Wait for WordPress to be ready
         run: |
           echo "Waiting for WordPress to start..."
           for i in {1..30}; do
-            if curl -s http://localhost:8080/wp-content/ | grep -q "<title>"; then
+            if curl -fsS http://localhost:8080/wp-admin/install.php >/dev/null; then
               echo "WordPress is ready!"
-              break
+              exit 0
             fi
             sleep 5
           done
+          docker compose ps
+          docker compose logs db wordpress
+          exit 1
+
+      - name: Install WordPress baseline site
+        run: |
+          docker run --rm \
+            --network "${COMPOSE_PROJECT_NAME}_wordpress_net" \
+            --volumes-from wp_app \
+            --user 33:33 \
+            -e WORDPRESS_DB_HOST=wp_db:3306 \
+            -e WORDPRESS_DB_USER="${WORDPRESS_DB_USER}" \
+            -e WORDPRESS_DB_PASSWORD="${WORDPRESS_DB_PASSWORD}" \
+            -e WORDPRESS_DB_NAME="${WORDPRESS_DB_NAME}" \
+            wordpress:cli \
+            wp core install \
+              --url=http://localhost:8080 \
+              --title="DevSecOps Initial Scan" \
+              --admin_user=dutzz23 \
+              --admin_password="Password123!" \
+              --admin_email=admin@example.com \
+              --skip-email
+
       - name: Install Ruby and WPScan
         run: |
           sudo apt-get update
           sudo apt-get install -y ruby-full build-essential libcurl4-openssl-dev zlib1g-dev
           sudo gem install wpscan
+
       - name: Run WPScan
+        env:
+          WPSCAN_API_TOKEN: ${{ secrets.WPSCAN_API_TOKEN }}
         run: |
-          wpscan --url http://localhost:8080 --enumerate u,vp,vt --force || true
+          mkdir -p scans/initial
+
+          WPSCAN_ARGS=(
+            --url http://localhost:8080
+            --enumerate u,ap,at,vp,vt
+            --plugins-detection aggressive
+            --force
+          )
+
+          if [ -n "$WPSCAN_API_TOKEN" ]; then
+            WPSCAN_ARGS+=(--api-token "$WPSCAN_API_TOKEN")
+          fi
+
+          wpscan "${WPSCAN_ARGS[@]}" -o scans/initial/wpscan-initial.txt || true
+
+      - name: Upload WPScan results
+        uses: actions/upload-artifact@v4
+        with:
+          name: wpscan-initial-results
+          path: scans/initial/
+          if-no-files-found: warn
+
+      - name: Shutdown WordPress stack
+        if: always()
+        run: |
+          docker compose down -v --remove-orphans
