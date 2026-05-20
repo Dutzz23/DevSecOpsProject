@@ -87,7 +87,12 @@ jobs:
             WPSCAN_ARGS+=(--api-token "$WPSCAN_API_TOKEN")
           fi
 
-          wpscan "${WPSCAN_ARGS[@]}" -o scans/initial/wpscan-initial.txt || true
+          set +e
+          wpscan "${WPSCAN_ARGS[@]}" 2>&1 | tee scans/initial/wpscan-initial.txt
+          WPSCAN_EXIT=${PIPESTATUS[0]}
+          echo "WPScan exit code: ${WPSCAN_EXIT}" | tee -a scans/initial/wpscan-initial.txt
+          test -s scans/initial/wpscan-initial.txt || echo "WPScan produced no output." > scans/initial/wpscan-initial.txt
+          exit 0
 
       - name: Upload WPScan results
         uses: actions/upload-artifact@v4
