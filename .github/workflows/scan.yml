@@ -80,7 +80,7 @@ jobs:
 
           WPSCAN_ARGS=(
             --url http://localhost:8080
-            --enumerate u,ap,at
+            --enumerate u,vp,vt
             --plugins-detection aggressive
             --force
           )
