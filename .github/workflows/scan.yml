@@ -9,6 +9,8 @@ on:
 jobs:
   wordpress-wpscan:
     runs-on: ubuntu-latest
+    environment: WPSCAN_API_TOKEN
+
     env:
       COMPOSE_PROJECT_NAME: wpbaseline
       WORDPRESS_DB_NAME: wordpress
@@ -83,15 +85,25 @@ jobs:
             --force
           )
 
+          set +e
+
           if [ -n "$WPSCAN_API_TOKEN" ]; then
-            WPSCAN_ARGS+=(--api-token "$WPSCAN_API_TOKEN")
+            echo "Running WPScan with API token."
+            wpscan "${WPSCAN_ARGS[@]}" --api-token "$WPSCAN_API_TOKEN" 2>&1 | tee scans/initial/wpscan-initial.txt
+            WPSCAN_EXIT=${PIPESTATUS[0]}
+
+            if [ "$WPSCAN_EXIT" -ne 0 ] && grep -Eq "status: 401|Unauthorized" scans/initial/wpscan-initial.txt; then
+              echo "" | tee -a scans/initial/wpscan-initial.txt
+              echo "WPScan API token was rejected. Retrying without token so the baseline scan still runs." | tee -a scans/initial/wpscan-initial.txt
+              wpscan "${WPSCAN_ARGS[@]}" 2>&1 | tee -a scans/initial/wpscan-initial.txt
+              WPSCAN_EXIT=${PIPESTATUS[0]}
+            fi
           else
             echo "WPSCAN_API_TOKEN is not available to this workflow."
+            wpscan "${WPSCAN_ARGS[@]}" 2>&1 | tee scans/initial/wpscan-initial.txt
+            WPSCAN_EXIT=${PIPESTATUS[0]}
           fi
 
-          set +e
-          wpscan "${WPSCAN_ARGS[@]}" 2>&1 | tee scans/initial/wpscan-initial.txt
-          WPSCAN_EXIT=${PIPESTATUS[0]}
           echo "WPScan exit code: ${WPSCAN_EXIT}" | tee -a scans/initial/wpscan-initial.txt
           test -s scans/initial/wpscan-initial.txt || echo "WPScan produced no output." > scans/initial/wpscan-initial.txt
           exit 0
