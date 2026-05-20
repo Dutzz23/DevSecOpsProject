@@ -78,13 +78,15 @@ jobs:
 
           WPSCAN_ARGS=(
             --url http://localhost:8080
-            --enumerate u,ap,at,vp,vt
+            --enumerate u,ap,at
             --plugins-detection aggressive
             --force
           )
 
           if [ -n "$WPSCAN_API_TOKEN" ]; then
             WPSCAN_ARGS+=(--api-token "$WPSCAN_API_TOKEN")
+          else
+            echo "WPSCAN_API_TOKEN is not available to this workflow."
           fi
 
           set +e
